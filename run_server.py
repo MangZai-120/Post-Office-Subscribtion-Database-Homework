@@ -111,10 +111,10 @@ def main() -> None:
             print(f"      详细错误：{e}")
         else:
             print(f"[ERR] 数据库连接失败：{e}")
-        sys.exit(1)
+        _halt_on_error()
     except Exception as e:
         print(f"[ERR] 无法连接/创建数据库，请检查 MySQL 与口令：{e}")
-        sys.exit(1)
+        _halt_on_error()
 
     # 建表 + 启动服务（api.run 内部会 _init_all_tables）
     from server import api  # noqa: E402
@@ -122,10 +122,22 @@ def main() -> None:
         api._init_all_tables()
     except Exception as e:
         print(f"[ERR] 建表失败：{e}")
-        sys.exit(1)
+        _halt_on_error()
     ensure_admin()
     print(f"[OK] 启动 API 服务：http://127.0.0.1:{port}  （Ctrl+C 停止）")
     api.run(port=port)
+
+
+def _halt_on_error() -> None:
+    """出错后暂停窗口，防止双击启动时一闪而过看不到报错。"""
+    print("\n" + "=" * 50)
+    print("启动失败！请把上面的 [ERR] 报错截图发给开发者。")
+    print("=" * 50)
+    try:
+        input("按回车键关闭此窗口...")
+    except (EOFError, KeyboardInterrupt):
+        pass
+    sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -21,4 +21,5 @@ Thumbs.db
 .history/
 
 # 本地 SSCA 配置（与本项目无关）
-.github/
+.github/.db_pwd
+.github
