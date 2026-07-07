@@ -8,6 +8,17 @@ import os
 import subprocess
 import sys
 
+# 强制控制台用 UTF-8 输出，避免中文在同学的 cmd(GBK) 里乱码
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+# 切到 UTF-8 代码页（chcp 65001），让 cmd 能正确显示中文
+try:
+    subprocess.run(["chcp", "65001"], capture_output=True, shell=True)
+except Exception:
+    pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
