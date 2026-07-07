@@ -1,21 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-核心权限管理模块 —— 员工权限管理
-================================================================
-对应思路图节点：
-    · 节点 10  员工权限管理（员工 CRUD、员工权限）
-    · 节点 17  标准员工权限分配（可自定义其它权限）
-    · 节点 20-25  权限等级 O5 ~ O0
-    · 节点 51-55  权限分级制度（路由/按钮/接口/数据 四类权限）
-    · 节点 101 权限管理（创建权限等级、分配权限）
-    · 节点 103 操作日志（全系统操作追查审计）
-
-技术栈：Python + pymysql + MySQL
-设计原则：前后端分离，本文件为后端核心逻辑，提供可被 Web 层调用的 API 函数。
-================================================================
-"""
-
 import functools
 import hashlib
 import json
@@ -27,19 +9,15 @@ from typing import Any, Dict, List, Optional, Tuple
 import pymysql
 from pymysql.cursors import DictCursor
 
-# ----------------------------------------------------------------
 # 日志配置
-# ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger = logging.getLogger("authority")
 
-# ----------------------------------------------------------------
 # 数据库连接配置（优先读环境变量，避免把口令写死进源码）
 # 可设置：PO_DB_HOST / PO_DB_PORT / PO_DB_USER / PO_DB_PASSWORD / PO_DB_NAME
-# ----------------------------------------------------------------
 DB_CONFIG: Dict[str, Any] = {
     "host": os.environ.get("PO_DB_HOST", "127.0.0.1"),
     "port": int(os.environ.get("PO_DB_PORT", "3306")),
@@ -50,15 +28,11 @@ DB_CONFIG: Dict[str, Any] = {
     "cursorclass": DictCursor,
 }
 
-
 def get_conn():
     """获取数据库连接，统一入口，便于切换连接池。"""
     return pymysql.connect(**DB_CONFIG)
 
-
-# ================================================================
 # 一、权限等级定义（O5 ~ O0）
-# ================================================================
 # 标准权限等级：数字越小权限范围越聚焦（O5 最高，O0 最末）。
 # 每个等级关联一组"菜单/按钮/接口/数据"权限标识，可自定义扩展。
 STANDARD_LEVELS: List[Dict[str, Any]] = [
@@ -125,10 +99,7 @@ STANDARD_LEVELS: List[Dict[str, Any]] = [
     },
 ]
 
-
-# ================================================================
 # 二、数据库表初始化（DDL）
-# ================================================================
 INIT_SQL_LIST: List[str] = [
     # 员工表
     """
@@ -206,7 +177,6 @@ INIT_SQL_LIST: List[str] = [
     """,
 ]
 
-
 def init_database() -> None:
     """初始化所有表结构，并写入标准权限等级。"""
     with get_conn() as conn:
@@ -226,29 +196,20 @@ def init_database() -> None:
         conn.commit()
         logger.info("数据库表结构与标准权限等级初始化完成。")
 
-
-# ================================================================
 # 三、密码加密工具
-# ================================================================
 _SALT = "post_office_2026"
-
 
 def hash_password(plain: str) -> str:
     """加盐 MD5 加密。"""
     return hashlib.md5(f"{plain}{_SALT}".encode("utf-8")).hexdigest()
 
-
 def verify_password(plain: str, hashed: str) -> bool:
     return hash_password(plain) == hashed
 
-
-# ================================================================
 # 四、员工 CRUD（节点 10）
-# ================================================================
 class EmployeeService:
     """员工增删改查、起停、密码重置。"""
 
-    # ---------- 增 ----------
     @staticmethod
     def add_employee(emp_no: str, username: str, password: str,
                      real_name: Optional[str] = None,
@@ -267,7 +228,6 @@ class EmployeeService:
             logger.info("新增员工 id=%s username=%s", new_id, username)
             return new_id
 
-    # ---------- 删 ----------
     @staticmethod
     def delete_employee(emp_id: int) -> int:
         """删除员工（同时清理其权限分配），返回受影响行数。"""
@@ -282,7 +242,6 @@ class EmployeeService:
             logger.info("删除员工 id=%s affected=%s", emp_id, affected)
             return affected
 
-    # ---------- 改 ----------
     @staticmethod
     def update_employee(emp_id: int, **fields) -> int:
         """
@@ -318,7 +277,6 @@ class EmployeeService:
             conn.commit()
             return cur.rowcount
 
-    # ---------- 查 ----------
     @staticmethod
     def get_employee(emp_id: int) -> Optional[Dict[str, Any]]:
         with get_conn() as conn:
@@ -368,10 +326,7 @@ class EmployeeService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-
-# ================================================================
 # 四点五、个人中心（节点 102：修改密码、查看个人信息）
-# ================================================================
 class ProfileService:
     """员工个人中心：查看本人信息、修改本人密码。仅作用于本人。"""
 
@@ -418,14 +373,10 @@ class ProfileService:
         logger.info("员工 id=%s 修改本人密码", emp_id)
         return affected
 
-
-# ================================================================
 # 五、权限等级与权限分配（节点 17 / 101）
-# ================================================================
 class PermissionService:
     """权限等级管理 + 员工权限分配。"""
 
-    # ---------- 权限等级 ----------
     @staticmethod
     def list_levels() -> List[Dict[str, Any]]:
         """列出全部权限等级。"""
@@ -446,7 +397,6 @@ class PermissionService:
             conn.commit()
             return cur.lastrowid
 
-    # ---------- 员工-等级分配 ----------
     @staticmethod
     def assign_level(emp_id: int, level: str) -> int:
         """给员工分配权限等级（一个员工可拥有多个等级，取并集）。"""
@@ -479,7 +429,6 @@ class PermissionService:
             )
             return [r["level"] for r in cur.fetchall()]
 
-    # ---------- 员工自定义权限（在等级之外的细粒度调整） ----------
     @staticmethod
     def grant_permission(emp_id: int, perm_code: str) -> int:
         """额外授予权限点。"""
@@ -506,7 +455,6 @@ class PermissionService:
             conn.commit()
             return cur.rowcount
 
-    # ---------- 计算员工最终权限集合 ----------
     @staticmethod
     def get_employee_permissions(emp_id: int) -> List[str]:
         """
@@ -541,10 +489,7 @@ class PermissionService:
                     perm_set.discard(row["perm_code"])
         return sorted(perm_set)
 
-
-# ================================================================
 # 六、权限校验（节点 51-55：四种权限）
-# ================================================================
 def _has_permission(emp_id: int, required: str) -> bool:
     """
     判断员工是否拥有某权限点。
@@ -562,7 +507,6 @@ def _has_permission(emp_id: int, required: str) -> bool:
         if p.endswith(":*") and required.startswith(p[:-1]):
             return True
     return False
-
 
 def require_permission(required: str):
     """
@@ -584,7 +528,6 @@ def require_permission(required: str):
         return wrapper
 
     return decorator
-
 
 class PermissionChecker:
     """供 Web 层调用的权限检查工具，对应四类权限。"""
@@ -614,10 +557,7 @@ class PermissionChecker:
         """根据员工权限过滤可见菜单列表。"""
         return [m for m in all_menus if PermissionChecker.check_menu(emp_id, m)]
 
-
-# ================================================================
 # 七、操作日志（节点 103）
-# ================================================================
 class OperationLogService:
     """全系统操作追查审计。"""
 
@@ -672,7 +612,6 @@ class OperationLogService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-
 def log_operation(module: str, action: str):
     """
     操作日志装饰器：自动记录被装饰函数的调用。
@@ -702,10 +641,7 @@ def log_operation(module: str, action: str):
 
     return decorator
 
-
-# ================================================================
 # 八、使用示例 / 自测
-# ================================================================
 def _demo():
     """演示用法（需先 init_database 并确保 MySQL 可连）。"""
     try:
@@ -732,7 +668,6 @@ def _demo():
     # 6. 操作日志
     OperationLogService.record(eid, "张三", "员工管理", "新增员工",
                                detail={"emp_no": "E001"})
-
 
 if __name__ == "__main__":
     _demo()

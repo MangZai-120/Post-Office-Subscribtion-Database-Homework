@@ -1,10 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-前端静态文件服务（托管 index.html），用 Python 内置 http.server。
-端口固定 8000，双击 start_all.bat 时由其调用。
-访问：http://127.0.0.1:8000
-"""
-
 import os
 import sys
 from functools import partial
@@ -12,7 +5,6 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(HERE, "web")  # 前端文件集中在 web/ 目录
-
 
 def main():
     port = 8000
@@ -31,7 +23,6 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n[前端] 已停止。")
-
 
 if __name__ == "__main__":
     main()

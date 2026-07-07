@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-报刊发放管理模块（业务模块）
-================================================================
-对应流程图节点：
-    · 节点 46  报刊发放系统（总节点）
-    · 节点 92  发放任务生成（订单 -> 每日发放任务）
-    · 节点 93  派送员分配（按区域自动分配任务给派送员）
-    · 节点 94  签收确认（派送员确认签收 / 异常上报）
-    · 节点 95  缺刊处理（缺刊登记、补发订单）
-
-技术栈：Python + pymysql + MySQL
-设计原则：
-    · 前后端分离，本文件为后端核心逻辑，提供 Web 层调用的 API 函数。
-    · 复用 master/authority.py 中的 get_conn() 与 OperationLogService。
-    · 发放任务使用业务唯一键(subscription_id, deliver_date)实现幂等，
-      避免重复生成任务；task_no 格式 DLV+YYYYMMDD+订阅ID保证唯一。
-    · 支持多派送员并行配送、异常上报、缺刊处理与补发链路。
-================================================================
-"""
-
 import logging
 import os
 import random
@@ -31,14 +9,10 @@ from typing import Any, Dict, List, Optional
 import pymysql
 from pymysql.cursors import DictCursor
 
-# ----------------------------------------------------------------
 # 复用权限模块的数据库连接 / 操作日志
-# ----------------------------------------------------------------
 from server.core.authority import DB_CONFIG, OperationLogService, get_conn  # noqa: E402
 
-# ----------------------------------------------------------------
 # 日志
-# ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -57,12 +31,8 @@ MISSING_STATUS_OPEN = "open"          # 待处理
 MISSING_STATUS_REISSUED = "reissued"  # 已补发
 MISSING_STATUS_CLOSED = "closed"      # 关闭
 
-
-# ================================================================
 # 一、建表 DDL（对应节点 92 / 93 / 94 / 95）
-# ================================================================
 INIT_SQL_LIST: List[str] = [
-    # ---------- 发放任务表（节点 92/93/94） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_delivery_task` (
         `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '任务ID',
@@ -89,7 +59,6 @@ INIT_SQL_LIST: List[str] = [
         KEY `idx_customer` (`customer_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报刊发放任务表';
     """,
-    # ---------- 缺刊处理表（节点 95） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_missing` (
         `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '缺刊记录ID',
@@ -111,7 +80,6 @@ INIT_SQL_LIST: List[str] = [
     """,
 ]
 
-
 def init_tables() -> None:
     """初始化报刊发放相关表结构（幂等，已存在则跳过）。"""
     with get_conn() as conn:
@@ -121,10 +89,7 @@ def init_tables() -> None:
         conn.commit()
     logger.info("报刊发放管理表结构初始化完成（biz_delivery_task / biz_missing）。")
 
-
-# ================================================================
 # 二、发放任务管理（节点 92 / 93 / 94）
-# ================================================================
 class DeliveryTaskService:
     """发放任务管理：生成日常配送任务、分配派送员、签收、异常上报。"""
 
@@ -366,10 +331,7 @@ class DeliveryTaskService:
         logger.info("任务 id=%s 异常上报：%s", task_id, remark)
         return affected
 
-
-# ================================================================
 # 三、缺刊处理（节点 95）
-# ================================================================
 class MissingService:
     """缺刊管理：登记缺刊、查询、补发。"""
 
@@ -501,17 +463,13 @@ class MissingService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-
-# ================================================================
 # 四、对外统一入口（供 Web 层 / 命令行测试调用）
-# ================================================================
 def main() -> None:
     """命令行自测：建表 + 打印各 Service 提示。"""
     init_tables()
     print("[OK] 报刊发放管理模块已就绪：")
     print("  - DeliveryTaskService   发放任务生成/分配/签收/异常上报")
     print("  - MissingService        缺刊登记/补发/查询")
-
 
 if __name__ == "__main__":
     main()

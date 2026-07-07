@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-报刊入库管理模块（业务模块）
-================================================================
-对应流程图节点：
-    · 节点 44  报刊入库管理
-    · 节点 84  入库登记（按期号批量入库，自动更新库存）
-    · 节点 85  库存盘点（定期盘点，差异调整）
-    · 节点 86  库存预警（库存低于阈值自动告警）
-    · 节点 87  入库查询（按报刊、日期范围查询入库流水）
-
-技术栈：Python + pymysql + MySQL
-设计原则：
-    · 前后端分离，本文件为后端核心逻辑，提供可被 Web 层调用的 API 函数。
-    · 复用 master/authority.py 中的 get_conn() 与 OperationLogService，
-      统一数据库连接入口与审计口径。
-    · 库存采用「快照 + 流水」双表：biz_stock 记当前库存，
-      biz_stock_in 记每笔入库流水，biz_stock_check 记盘点差异。
-================================================================
-"""
-
 import logging
 import os
 import sys
@@ -28,26 +6,18 @@ from typing import Any, Dict, List, Optional
 import pymysql
 from pymysql.cursors import DictCursor
 
-# ----------------------------------------------------------------
 # 复用权限模块的数据库连接 / 操作日志
-# ----------------------------------------------------------------
 from server.core.authority import DB_CONFIG, OperationLogService, get_conn  # noqa: E402
 
-# ----------------------------------------------------------------
 # 日志
-# ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger = logging.getLogger("stock")
 
-
-# ================================================================
 # 一、建表 DDL（对应节点 84 / 85 / 86 / 87）
-# ================================================================
 INIT_SQL_LIST: List[str] = [
-    # ---------- 库存快照表（节点 84/86） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_stock` (
         `id`           BIGINT      NOT NULL AUTO_INCREMENT COMMENT '库存ID',
@@ -62,7 +32,6 @@ INIT_SQL_LIST: List[str] = [
         KEY `idx_paper` (`newspaper_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库存快照表';
     """,
-    # ---------- 入库流水表（节点 84/87） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_stock_in` (
         `id`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '入库流水ID',
@@ -77,7 +46,6 @@ INIT_SQL_LIST: List[str] = [
         KEY `idx_time` (`create_time`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='入库流水表';
     """,
-    # ---------- 盘点记录表（节点 85） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_stock_check` (
         `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '盘点记录ID',
@@ -96,7 +64,6 @@ INIT_SQL_LIST: List[str] = [
     """,
 ]
 
-
 def init_tables() -> None:
     """初始化入库管理相关表结构（幂等，已存在则跳过）。"""
     with get_conn() as conn:
@@ -107,10 +74,7 @@ def init_tables() -> None:
     logger.info("报刊入库管理表结构初始化完成"
                 "（biz_stock / biz_stock_in / biz_stock_check）。")
 
-
-# ================================================================
 # 二、入库登记与流水查询（节点 84 / 87）
-# ================================================================
 class StockInService:
     """入库登记、批量入库、入库流水查询。"""
 
@@ -256,10 +220,7 @@ class StockInService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-
-# ================================================================
 # 三、库存查询与预警（节点 86）
-# ================================================================
 class StockService:
     """库存查询、预警、阈值设置。"""
 
@@ -354,10 +315,7 @@ class StockService:
         )
         return affected
 
-
-# ================================================================
 # 四、库存盘点（节点 85）
-# ================================================================
 class StockCheckService:
     """库存盘点：记录差异并调整库存。"""
 
@@ -454,10 +412,7 @@ class StockCheckService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-
-# ================================================================
 # 五、对外统一入口（供 Web 层 / 命令行测试调用）
-# ================================================================
 def main() -> None:
     """命令行自测：建表 + 打印各 Service 提示。"""
     init_tables()
@@ -465,7 +420,6 @@ def main() -> None:
     print("  - StockInService     入库登记 / 批量入库 / 入库流水查询")
     print("  - StockService       库存查询 / 库存预警 / 阈值设置")
     print("  - StockCheckService  库存盘点 / 差异调整 / 盘点记录")
-
 
 if __name__ == "__main__":
     main()

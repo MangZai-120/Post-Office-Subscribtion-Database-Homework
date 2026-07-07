@@ -1,24 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-一键启动脚本（本地开发用）
-================================================================
-功能：
-    1. 若未设置 PO_DB_PASSWORD 环境变量，则用 getpass 安全提示输入
-       MySQL 口令（终端隐藏输入，不回显、不落盘）。
-    2. 自动创建数据库 post_office（若不存在）。
-    3. 建好全部表并写入标准权限等级 + 初始 admin 账号。
-    4. 启动 HTTP API 服务（默认 8088）。
-
-用法：
-    python run_server.py            # 默认端口 8088
-    python run_server.py 9000       # 自定义端口
-
-数据库连接可用环境变量覆盖：
-    PO_DB_HOST / PO_DB_PORT / PO_DB_USER / PO_DB_PASSWORD / PO_DB_NAME
-================================================================
-"""
-
 import getpass
 import os
 import sys
@@ -26,7 +5,6 @@ import sys
 import pymysql
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
-
 
 def ensure_password() -> None:
     """确保 PO_DB_PASSWORD 已就绪；优先级：环境变量 > 本地 .db_pwd 文件 > getpass 输入。"""
@@ -45,7 +23,6 @@ def ensure_password() -> None:
     user = os.environ.get("PO_DB_USER", "root")
     pwd = getpass.getpass(f"请输入 MySQL 用户 {user} 的密码（输入不显示）：")
     os.environ["PO_DB_PASSWORD"] = pwd
-
 
 def ensure_database() -> None:
     """连接 MySQL（不指定库），创建 post_office 数据库。"""
@@ -66,7 +43,6 @@ def ensure_database() -> None:
     finally:
         conn.close()
 
-
 def ensure_admin() -> None:
     """写入初始 admin 账号（若不存在），并分配 O5 超级管理员。"""
     from server.core.authority import (EmployeeService, PermissionService,  # noqa: E402
@@ -84,7 +60,6 @@ def ensure_admin() -> None:
         admin_id = cur.lastrowid
     PermissionService.assign_level(admin_id, "O5")
     print("[OK] 初始账号已创建：admin / admin123（O5 超级管理员）。")
-
 
 def main() -> None:
     port = 8088
@@ -127,7 +102,6 @@ def main() -> None:
     print(f"[OK] 启动 API 服务：http://127.0.0.1:{port}  （Ctrl+C 停止）")
     api.run(port=port)
 
-
 def _halt_on_error() -> None:
     """出错后暂停窗口，防止双击启动时一闪而过看不到报错。"""
     print("\n" + "=" * 50)
@@ -138,7 +112,6 @@ def _halt_on_error() -> None:
     except (EOFError, KeyboardInterrupt):
         pass
     sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

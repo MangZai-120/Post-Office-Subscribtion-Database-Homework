@@ -1,9 +1,5 @@
--- ================================================================
 -- 邮局报刊订阅系统 —— 核心权限管理模块 建表脚本
 -- 对应 authority.py 的 INIT_SQL_LIST
--- 执行方式：mysql -u root -p < schema.sql
---          或在 Navicat / MySQL Workbench 中直接运行
--- ================================================================
 
 -- 1. 创建数据库（如已存在请注释本行）
 CREATE DATABASE IF NOT EXISTS `post_office`
@@ -12,9 +8,7 @@ CREATE DATABASE IF NOT EXISTS `post_office`
 
 USE `post_office`;
 
--- ----------------------------------------------------------------
 -- 2. 员工表（节点 10）
--- ----------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_employee`;
 CREATE TABLE `sys_employee` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '员工ID',
@@ -32,9 +26,7 @@ CREATE TABLE `sys_employee` (
     UNIQUE KEY `uk_emp_no` (`emp_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='员工表';
 
--- ----------------------------------------------------------------
 -- 3. 权限等级表（节点 17 / 20-25）
--- ----------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_auth_level`;
 CREATE TABLE `sys_auth_level` (
     `level` VARCHAR(8)   NOT NULL COMMENT '等级编码 O5~O0',
@@ -43,9 +35,7 @@ CREATE TABLE `sys_auth_level` (
     PRIMARY KEY (`level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限等级表';
 
--- ----------------------------------------------------------------
 -- 4. 权限点表（菜单/按钮/接口/数据 四类，节点 51-55）
--- ----------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_permission`;
 CREATE TABLE `sys_permission` (
     `id`   BIGINT       NOT NULL AUTO_INCREMENT,
@@ -56,9 +46,7 @@ CREATE TABLE `sys_permission` (
     UNIQUE KEY `uk_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限点表';
 
--- ----------------------------------------------------------------
 -- 5. 员工-等级 分配表
--- ----------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_employee_level`;
 CREATE TABLE `sys_employee_level` (
     `emp_id`     BIGINT     NOT NULL,
@@ -68,9 +56,7 @@ CREATE TABLE `sys_employee_level` (
     KEY `idx_level` (`level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='员工-等级分配表';
 
--- ----------------------------------------------------------------
 -- 6. 员工-自定义权限 表（在等级之外额外授予/撤销权限）
--- ----------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_employee_permission`;
 CREATE TABLE `sys_employee_permission` (
     `emp_id`    BIGINT       NOT NULL,
@@ -80,9 +66,7 @@ CREATE TABLE `sys_employee_permission` (
     KEY `idx_emp` (`emp_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='员工自定义权限表';
 
--- ----------------------------------------------------------------
 -- 7. 操作日志表（节点 103）
--- ----------------------------------------------------------------
 DROP TABLE IF EXISTS `sys_operation_log`;
 CREATE TABLE `sys_operation_log` (
     `id`         BIGINT      NOT NULL AUTO_INCREMENT,
@@ -99,9 +83,7 @@ CREATE TABLE `sys_operation_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作日志表';
 
 
--- ================================================================
 -- 初始化数据
--- ================================================================
 
 -- 标准权限等级（O5 ~ O0）
 INSERT INTO `sys_auth_level`(`level`, `name`, `desc`) VALUES
@@ -156,9 +138,7 @@ INSERT INTO `sys_permission`(`code`, `type`, `name`) VALUES
 ('data:delivery:self','data','发放-仅本人任务'),
 ('data:finance:all',  'data','费用-全部数据');
 
--- ================================================================
 -- 初始超级管理员账号
--- ================================================================
 -- 默认账号：admin / admin123
 -- 密码加盐规则与 authority.py 中 hash_password() 一致：
 --   md5('admin123' + 'post_office_2026')
@@ -176,12 +156,9 @@ VALUES (
 INSERT INTO `sys_employee_level`(`emp_id`, `level`)
 SELECT id, 'O5' FROM `sys_employee` WHERE username='admin';
 
--- ================================================================
 -- 业务模块表（与各 Python 模块 INIT_SQL_LIST 保持一致）
 -- 各模块启动时会自动 CREATE TABLE IF NOT EXISTS，此处集中列出便于手动建库
--- ================================================================
 
--- ---------- 客户数据管理（customer.py：节点 68 / 69 / 70） ----------
 CREATE TABLE IF NOT EXISTS `biz_customer` (
     `id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '客户ID',
     `cust_no`      VARCHAR(32)  NOT NULL COMMENT '客户编号(业务唯一)',
@@ -230,7 +207,6 @@ CREATE TABLE IF NOT EXISTS `biz_customer_tag` (
     KEY `idx_customer` (`customer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户标签表';
 
--- ---------- 报刊数据管理（newspaper.py：节点 60 / 62 / 63 / 64） ----------
 CREATE TABLE IF NOT EXISTS `biz_category` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '分类ID',
     `name`        VARCHAR(64)  NOT NULL COMMENT '分类名',
@@ -263,7 +239,6 @@ CREATE TABLE IF NOT EXISTS `biz_newspaper` (
     KEY `idx_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报刊信息表';
 
--- ---------- 订阅管理（subscription.py：节点 76 / 77 / 78 / 79） ----------
 CREATE TABLE IF NOT EXISTS `biz_subscription` (
     `id`           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '订阅ID',
     `sub_no`       VARCHAR(32)   NOT NULL COMMENT '订阅单号',
@@ -288,7 +263,6 @@ CREATE TABLE IF NOT EXISTS `biz_subscription` (
     KEY `idx_end_date` (`end_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订阅表';
 
--- ---------- 报刊入库管理（stock.py：节点 84 / 85 / 86 / 87） ----------
 CREATE TABLE IF NOT EXISTS `biz_stock` (
     `id`           BIGINT      NOT NULL AUTO_INCREMENT COMMENT '库存ID',
     `newspaper_id` BIGINT      NOT NULL COMMENT '报刊ID',
@@ -329,7 +303,6 @@ CREATE TABLE IF NOT EXISTS `biz_stock_check` (
     KEY `idx_paper` (`newspaper_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='库存盘点记录表';
 
--- ---------- 报刊发放系统（delivery.py：节点 92 / 93 / 94 / 95） ----------
 CREATE TABLE IF NOT EXISTS `biz_delivery_task` (
     `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '任务ID',
     `task_no`         VARCHAR(40)  NOT NULL COMMENT '任务单号(业务唯一)',
@@ -371,6 +344,4 @@ CREATE TABLE IF NOT EXISTS `biz_missing` (
     KEY `idx_customer` (`customer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='缺刊处理表';
 
--- ================================================================
 -- 结束
--- ================================================================

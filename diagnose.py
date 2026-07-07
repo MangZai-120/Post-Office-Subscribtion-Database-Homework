@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-环境诊断脚本：检查本机是否具备运行本系统的条件。
-双击 诊断.bat 调用此脚本，结果会暂停显示，方便截图发给开发者。
-"""
-
 import os
 import subprocess
 import sys
@@ -21,11 +15,9 @@ except Exception:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-
 def line_ok(msg): print(f"  [OK]   {msg}")
 def line_fail(msg): print(f"  [FAIL] {msg}")
 def line_info(msg): print(f"         {msg}")
-
 
 def main():
     print("=" * 56)
@@ -33,13 +25,11 @@ def main():
     print("=" * 56)
     all_ok = True
 
-    # ---- 1. Python ----
     print("\n[1] Python 环境")
     print(f"      版本: {sys.version.split()[0]}")
     print(f"      路径: {sys.executable}")
     line_ok("Python 已安装")
 
-    # ---- 2. pymysql ----
     print("\n[2] pymysql 库（Python 连 MySQL 必需）")
     try:
         import pymysql
@@ -56,7 +46,6 @@ def main():
             line_fail(f"自动安装失败：{e}")
             line_info("请手动执行：pip install pymysql")
 
-    # ---- 3. MySQL 服务 ----
     print("\n[3] MySQL 服务（最关键，没装就跑不了）")
     mysql_running = False
     try:
@@ -100,7 +89,6 @@ def main():
     except Exception as e:
         line_info(f"(服务检测异常：{e})")
 
-    # ---- 4. 3306 端口 ----
     print("\n[4] MySQL 端口 3306")
     import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -113,7 +101,6 @@ def main():
         line_fail("3306 端口连不上（MySQL 没启动，或没装）")
         all_ok = False
 
-    # ---- 5. 尝试连数据库 ----
     print("\n[5] 数据库连接测试")
     if mysql_running or True:  # 即使服务检测失败也试一下
         pwd = os.environ.get("PO_DB_PASSWORD", "")
@@ -156,7 +143,6 @@ def main():
                 line_fail(f"连接异常：{e}")
                 all_ok = False
 
-    # ---- 总结 ----
     print("\n" + "=" * 56)
     if all_ok:
         print("  ✓ 环境正常！可以双击 start_all.bat 启动系统了。")
@@ -170,7 +156,6 @@ def main():
         input("按回车键关闭此窗口...")
     except (EOFError, KeyboardInterrupt):
         pass
-
 
 if __name__ == "__main__":
     main()

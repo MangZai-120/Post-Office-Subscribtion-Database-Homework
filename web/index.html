@@ -125,9 +125,7 @@
 <div id="toast"></div>
 
 <script>
-// ============================================================
 // 全局状态 & 基础工具
-// ============================================================
 const state = { base: "http://127.0.0.1:8088", empId: null, permissions: [], user: null, active: null };
 
 function $(id){ return document.getElementById(id); }
@@ -164,9 +162,7 @@ async function api(method, path, body){
   return data.data;
 }
 
-// ============================================================
 // 登录 / 登出
-// ============================================================
 async function doLogin(){
   state.base = $("lg-base").value.trim().replace(/\/+$/, "");
   const username = $("lg-user").value.trim();
@@ -206,9 +202,7 @@ function tryRestore(){
   } catch(e){ /* 忽略损坏的会话 */ }
 }
 
-// ============================================================
 // 菜单（按权限过滤，节点 52 路由/菜单权限）
-// ============================================================
 const MENUS = [
   { key: "newspaper",    label: "报刊数据管理", perm: "menu:newspaper" },
   { key: "category",     label: "报刊分类管理", perm: "menu:category" },
@@ -256,10 +250,8 @@ function setHeader(title, desc){
   return '<h2 class="page-title">' + esc(title) + '</h2><p class="page-desc">' + esc(desc) + '</p>';
 }
 
-// ============================================================
 // 通用弹窗表单
 // fields: [{ name, label, type(text/number/password/select/textarea/date), required, options:[{value,label}], value }]
-// ============================================================
 function openForm(title, fields, onSubmit){
   const card = $("modal-card");
   let html = "<h3>" + esc(title) + "</h3>";
@@ -301,11 +293,9 @@ function openForm(title, fields, onSubmit){
 }
 function closeModal(){ $("modal").style.display = "none"; $("modal-card").innerHTML = ""; }
 
-// ============================================================
 // 通用列表渲染（搜索 + 分页 + 行操作）
 // opts: { title, desc, toolbar:[{label,fn,cls}], filters:[{name,label,type,options}],
 //         columns:[{key,label,render}], load: async(q)=>({total,page,size,list}), actions:(row)=>[{label,fn,cls}] }
-// ============================================================
 function renderList(opts){
   const c = $("content");
   let page = 1;
@@ -391,13 +381,10 @@ async function confirmDo(msg, fn){
   try { await fn(); } catch(e){ toast(e.message, true); }
 }
 
-// ============================================================
 // 各功能页面
-// ============================================================
 const SECTIONS = {};
 const CYCLE_OPTS = [ {value:"",label:"周期"}, {value:"daily",label:"日刊"}, {value:"weekly",label:"周刊"}, {value:"monthly",label:"月刊"}, {value:"quarterly",label:"季刊"} ];
 
-// ---------- 报刊数据管理（节点 38/60/63/64） ----------
 SECTIONS.newspaper = function(){
   const reload = renderList({
     title: "报刊数据管理", desc: "报刊信息维护、价格策略、检索（节点 60/63/64）",
@@ -443,7 +430,6 @@ function priceNewspaper(r, reload){ openForm("价格策略 - "+r.name, [
   {name:"discount",label:"折扣(0-1)",type:"number",value:r.discount},
 ], async v=>{ await api("PUT","/api/newspapers/"+r.id+"/price",v); toast("价格已更新"); reload(); }); }
 
-// ---------- 报刊分类管理（节点 62） ----------
 SECTIONS.category = function(){
   renderList({
     title: "报刊分类管理", desc: "树形分类维护（节点 62）",
@@ -469,7 +455,6 @@ function addCategory(reload){ openForm("新增分类",[
   {name:"sort",label:"排序",type:"number",value:0},
 ], async v=>{ await api("POST","/api/categories",v); toast("新增成功"); reload(); }); }
 
-// ---------- 客户数据管理（节点 68/69/70/71） ----------
 SECTIONS.customer = function(){
   renderList({
     title: "客户数据管理", desc: "客户档案、地址、标签、订阅历史（节点 68/69/70/71）",
@@ -548,7 +533,6 @@ async function viewSubHistory(r){
   $("modal-card").innerHTML = html; $("modal").style.display="flex";
 }
 
-// ---------- 订阅管理（节点 76/77/78） ----------
 SECTIONS.subscription = function(){
   renderList({
     title: "订阅管理", desc: "新建订阅、退订/换订、续订提醒（节点 76/77/78）",
@@ -588,7 +572,6 @@ async function viewExpiring(){
   $("modal-card").innerHTML=html; $("modal").style.display="flex";
 }
 
-// ---------- 订阅统计（节点 79） ----------
 SECTIONS.substat = async function(){
   const c = $("content");
   c.innerHTML = setHeader("订阅统计", "按报刊 / 客户类型多维统计（节点 79）");
@@ -607,7 +590,6 @@ SECTIONS.substat = async function(){
   } catch(e){ c.innerHTML += '<div class="empty">加载失败：'+esc(e.message)+"</div>"; }
 };
 
-// ---------- 报刊入库管理（节点 84/85/86/87） ----------
 SECTIONS.stock = function(){
   renderList({
     title: "报刊入库管理", desc: "入库登记、库存预警、盘点（节点 84/85/86/87）",
@@ -661,7 +643,6 @@ async function stockInLog(){
   $("modal-card").innerHTML=html; $("modal").style.display="flex";
 }
 
-// ---------- 报刊发放系统（节点 92/93/94/95） ----------
 SECTIONS.delivery = function(){
   renderList({
     title: "报刊发放系统", desc: "任务生成、派送员分配、签收、缺刊处理（节点 92/93/94/95）",
@@ -712,7 +693,6 @@ async function missingList(){
     async v=>{ await api("POST","/api/delivery/missing/"+b.dataset.mid+"/reissue",v); toast("补发任务已生成"); missingList(); }));
 }
 
-// ---------- 员工权限管理（节点 100/101） ----------
 SECTIONS.employee = function(){
   renderList({
     title: "员工权限管理", desc: "员工 CRUD、等级与权限分配（节点 100/101，需超级管理员）",
@@ -755,7 +735,6 @@ async function manageLevels(r){
     try{ await api("DELETE","/api/employees/"+r.id+"/levels/"+a.dataset.rv); toast("已撤销"); manageLevels(r);}catch(err){toast(err.message,true);} });
 }
 
-// ---------- 权限等级管理（节点 20-25 / 101） ----------
 SECTIONS.authlevel = function(){
   renderList({
     title: "权限等级管理", desc: "标准等级 O5~O0 与自定义等级（节点 20-25/101）",
@@ -767,7 +746,6 @@ SECTIONS.authlevel = function(){
   });
 };
 
-// ---------- 操作日志（节点 103） ----------
 SECTIONS.logs = function(){
   renderList({
     title: "操作日志", desc: "全系统操作审计（节点 103）",
@@ -779,7 +757,6 @@ SECTIONS.logs = function(){
   });
 };
 
-// ---------- 个人中心（节点 102） ----------
 SECTIONS.profile = async function(){
   const c = $("content");
   c.innerHTML = setHeader("个人中心", "查看本人信息、修改本人密码（节点 102）");
@@ -804,9 +781,7 @@ SECTIONS.profile = async function(){
   } catch(e){ c.innerHTML += '<div class="empty">加载失败：'+esc(e.message)+"</div>"; }
 };
 
-// ============================================================
 // 启动
-// ============================================================
 $("lg-pass").addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
 tryRestore();
 </script>

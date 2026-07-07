@@ -1,30 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-客户数据管理 —— Web / API 层（原生 http.server，零第三方依赖）
-================================================================
-在 staffsystem/customer.py 的 Service 层之上，提供 HTTP RESTful 接口，
-供前端（fetch / axios）或 Postman 调用。
-
-对应流程图：节点 40 客户数据管理（68 档案 / 69 地址 / 70 标签 / 71 订阅历史）。
-
-权限设计（接入 master/authority.py）：
-    · 客户管理属于 O3（客户/订阅管理员），权限点 api:customer:*。
-    · O5 超级管理员拥有 "*" 通配符，自动放行。
-    · 调用方需在请求头携带 X-Emp-Id 标识操作者，后端据此鉴权 + 记日志。
-    · 鉴权失败统一返回 403。
-
-启动：
-    python staffsystem/api_server.py            # 默认 0.0.0.0:8088
-    python staffsystem/api_server.py 9000       # 自定义端口
-
-接口约定：
-    统一响应体：
-        { "code": 0, "msg": "ok", "data": <任意> }
-        code=0 成功；code!=0 失败（403 鉴权失败 / 400 参数错误 / 404 未找到 / 500 内部错误）
-================================================================
-"""
-
 import json
 import logging
 import os
@@ -65,10 +38,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("api")
 
-
-# ================================================================
 # 一、路由表定义
-# ================================================================
 # 每条路由：(method, regex, handler, perm_code)
 #   perm_code 形如 "customer:list"，会被 api:customer:* 通配符命中
 # handler 签名: handler(handler_obj, path_params: Dict[str,str],
@@ -80,13 +50,11 @@ NAME = r"([^/]+)"              # 任意非斜杠片段（标签名等）
 # 避免 Python 加载时立即求值导致 NameError（函数尚未定义）。
 _ROUTES_CACHE: Optional[List[Tuple[str, str, Callable, str]]] = None
 
-
 def _get_routes() -> List[Tuple[str, str, Callable, str]]:
     global _ROUTES_CACHE
     if _ROUTES_CACHE is not None:
         return _ROUTES_CACHE
     _ROUTES_CACHE = [
-        # ---------- 客户档案（节点 68） ----------
         ("GET",    r"^/api/customers$",                                  list_customers,    "customer:list"),
         ("GET",    rf"^/api/customers/{INT}$",                            get_customer,      "customer:read"),
         ("POST",   r"^/api/customers$",                                  create_customer,   "customer:create"),
@@ -95,29 +63,23 @@ def _get_routes() -> List[Tuple[str, str, Callable, str]]:
         ("PUT",    rf"^/api/customers/{INT}/status$",                     set_status,        "customer:update"),
         ("PUT",    rf"^/api/customers/{INT}/password$",                   reset_password,    "customer:update"),
 
-    # ---------- 地址管理（节点 69） ----------
     ("GET",    rf"^/api/customers/{INT}/addresses$",                  list_addresses,    "customer:read"),
     ("POST",   rf"^/api/customers/{INT}/addresses$",                  add_address,       "customer:update"),
     ("PUT",    rf"^/api/addresses/{INT}$",                            update_address,    "customer:update"),
     ("DELETE", rf"^/api/addresses/{INT}$",                            delete_address,    "customer:update"),
     ("PUT",    rf"^/api/customers/{INT}/addresses/{INT}/default$",    set_default_addr,  "customer:update"),
 
-    # ---------- 客户标签（节点 70） ----------
     ("GET",    rf"^/api/customers/{INT}/tags$",                       list_tags,         "customer:read"),
     ("POST",   rf"^/api/customers/{INT}/tags$",                       set_tag,           "customer:update"),
     ("DELETE", rf"^/api/customers/{INT}/tags/{NAME}$",                remove_tag,        "customer:update"),
     ("GET",    rf"^/api/tags/{NAME}/customers$",                      find_by_tag,       "customer:list"),
 
-    # ---------- 订阅历史（节点 71） ----------
         ("GET",    rf"^/api/customers/{INT}/subscriptions$",              sub_history,       "customer:read"),
         ("GET",    rf"^/api/customers/{INT}/subscriptions/summary$",      sub_summary,       "customer:read"),
     ]
     return _ROUTES_CACHE
 
-
-# ================================================================
 # 二、辅助工具
-# ================================================================
 def _operator_name(emp_id: Optional[int]) -> Optional[str]:
     """根据 emp_id 取员工真实姓名，用于操作日志。"""
     if not emp_id:
@@ -128,13 +90,11 @@ def _operator_name(emp_id: Optional[int]) -> Optional[str]:
     except Exception:  # 鉴权信息缺失时不影响主流程
         return None
 
-
 def _int(v: Any, default: int = 0) -> int:
     try:
         return int(v)
     except (TypeError, ValueError):
         return default
-
 
 def _opt_int(v: Any) -> Optional[int]:
     if v in (None, "", "null"):
@@ -144,14 +104,10 @@ def _opt_int(v: Any) -> Optional[int]:
     except (TypeError, ValueError):
         return None
 
-
-# ================================================================
 # 三、路由处理函数
-# ================================================================
 # 约定：返回 (code, msg, data)；code=0 成功
 # path_params 是正则捕获组映射成具名 dict，便于阅读
 
-# ---------- 客户档案 ----------
 def list_customers(h, p, q, b):
     res = CustomerService.list_customers(
         keyword=q.get("keyword", ""),
@@ -163,14 +119,12 @@ def list_customers(h, p, q, b):
     )
     return 0, "ok", res
 
-
 def get_customer(h, p, q, b):
     cid = int(p["id"])
     row = CustomerService.get_customer(cid)
     if not row:
         return 404, "客户不存在", None
     return 0, "ok", row
-
 
 def create_customer(h, p, q, b):
     required = ("cust_no", "cust_type", "name")
@@ -188,7 +142,6 @@ def create_customer(h, p, q, b):
     )
     return 0, "新增成功", {"id": new_id}
 
-
 def update_customer(h, p, q, b):
     cid = int(p["id"])
     emp_id = h.operator_id
@@ -201,7 +154,6 @@ def update_customer(h, p, q, b):
         operator_name=_operator_name(emp_id), **fields)
     return 0, "修改成功", {"affected": affected}
 
-
 def delete_customer(h, p, q, b):
     cid = int(p["id"])
     emp_id = h.operator_id
@@ -210,7 +162,6 @@ def delete_customer(h, p, q, b):
     if not affected:
         return 404, "客户不存在", None
     return 0, "删除成功", {"affected": affected}
-
 
 def set_status(h, p, q, b):
     cid = int(p["id"])
@@ -223,7 +174,6 @@ def set_status(h, p, q, b):
         operator_name=_operator_name(emp_id))
     return 0, "状态已更新", {"affected": affected}
 
-
 def reset_password(h, p, q, b):
     cid = int(p["id"])
     pwd = b.get("password")
@@ -235,12 +185,9 @@ def reset_password(h, p, q, b):
         operator_name=_operator_name(emp_id))
     return 0, "密码已重置", {"affected": affected}
 
-
-# ---------- 地址管理 ----------
 def list_addresses(h, p, q, b):
     cid = int(p["id"])
     return 0, "ok", CustomerAddressService.list_addresses(cid)
-
 
 def add_address(h, p, q, b):
     cid = int(p["id"])
@@ -255,7 +202,6 @@ def add_address(h, p, q, b):
         operator_id=emp_id, operator_name=_operator_name(emp_id))
     return 0, "新增成功", {"id": new_id}
 
-
 def update_address(h, p, q, b):
     aid = int(p["id"])
     emp_id = h.operator_id
@@ -267,7 +213,6 @@ def update_address(h, p, q, b):
         operator_name=_operator_name(emp_id), **fields)
     return 0, "修改成功", {"affected": affected}
 
-
 def delete_address(h, p, q, b):
     aid = int(p["id"])
     emp_id = h.operator_id
@@ -276,7 +221,6 @@ def delete_address(h, p, q, b):
     if not affected:
         return 404, "地址不存在", None
     return 0, "删除成功", {"affected": affected}
-
 
 def set_default_addr(h, p, q, b):
     cid = int(p["id"])         # 路径第一个 INT：customer_id
@@ -289,12 +233,9 @@ def set_default_addr(h, p, q, b):
         return 404, "地址不存在或不属于该客户", None
     return 0, "已设为默认", {"affected": affected}
 
-
-# ---------- 客户标签 ----------
 def list_tags(h, p, q, b):
     cid = int(p["id"])
     return 0, "ok", CustomerTagService.list_tags(cid)
-
 
 def set_tag(h, p, q, b):
     cid = int(p["id"])
@@ -307,7 +248,6 @@ def set_tag(h, p, q, b):
         operator_id=emp_id, operator_name=_operator_name(emp_id))
     return 0, "标签已设置", {"affected": affected}
 
-
 def remove_tag(h, p, q, b):
     cid = int(p["id"])
     tag_name = p["name"]
@@ -319,15 +259,12 @@ def remove_tag(h, p, q, b):
         return 404, "该客户无此标签", None
     return 0, "标签已移除", {"affected": affected}
 
-
 def find_by_tag(h, p, q, b):
     tag_name = p["name"]
     rows = CustomerTagService.find_customers_by_tag(
         tag_name, tag_value=q.get("value") or None)
     return 0, "ok", rows
 
-
-# ---------- 订阅历史 ----------
 def sub_history(h, p, q, b):
     cid = int(p["id"])
     res = SubscriptionHistoryService.list_by_customer(
@@ -335,18 +272,13 @@ def sub_history(h, p, q, b):
         size=max(_int(q.get("size"), 20), 1))
     return 0, "ok", res
 
-
 def sub_summary(h, p, q, b):
     cid = int(p["id"])
     return 0, "ok", SubscriptionHistoryService.summary(cid)
 
-
-# ================================================================
 # 四、HTTP 请求处理器
-# ================================================================
 class _RouteMatch:
     __slots__ = ("handler", "perm", "params")
-
 
 def _match_route(method: str, path: str) -> Optional[_RouteMatch]:
     """按路由表匹配，返回处理函数 / 权限点 / 命名参数。"""
@@ -390,10 +322,7 @@ def _match_route(method: str, path: str) -> Optional[_RouteMatch]:
         return rm
     return None
 
-
-# ================================================================
 # 三点五、扩展模块路由（报刊 / 订阅 / 入库 / 发放 / 系统用户 / 个人中心）
-# ================================================================
 # 扩展路由采用「显式命名捕获组」机制：每条路由额外声明 param_names，
 # _match_ext 按顺序把正则捕获组 zip 成具名参数，避免旧匹配器的语义猜测。
 def _do_login(body: Dict[str, Any]) -> Tuple[int, str, Any]:
@@ -423,7 +352,6 @@ def _do_login(body: Dict[str, Any]) -> Tuple[int, str, Any]:
         "permissions": PermissionService.get_employee_permissions(emp_id),
     }
 
-
 def _date(v: Any) -> Optional[date]:
     """把 'YYYY-MM-DD' 字符串解析为 date；空值返回 None，非法格式抛 ValueError。"""
     if v in (None, "", "null"):
@@ -435,8 +363,6 @@ def _date(v: Any) -> Optional[date]:
     except ValueError:
         raise ValueError(f"日期格式应为 YYYY-MM-DD: {v}")
 
-
-# ---------- 报刊数据管理（节点 38 / 60 / 62 / 63 / 64） ----------
 def ext_list_newspapers(h, p, q, b):
     return 0, "ok", newspaper_mod.NewspaperService.list_newspapers(
         keyword=q.get("keyword", ""),
@@ -446,13 +372,11 @@ def ext_list_newspapers(h, p, q, b):
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
 
-
 def ext_get_newspaper(h, p, q, b):
     row = newspaper_mod.NewspaperService.get_newspaper(int(p["id"]))
     if not row:
         return 404, "报刊不存在", None
     return 0, "ok", row
-
 
 def ext_create_newspaper(h, p, q, b):
     if not b.get("paper_no") or not b.get("name"):
@@ -467,7 +391,6 @@ def ext_create_newspaper(h, p, q, b):
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "新增成功", {"id": nid}
 
-
 def ext_update_newspaper(h, p, q, b):
     eid = h.operator_id
     fields = {k: v for k, v in b.items() if k in {
@@ -478,14 +401,12 @@ def ext_update_newspaper(h, p, q, b):
         operator_name=_operator_name(eid), **fields)
     return 0, "修改成功", {"affected": aff}
 
-
 def ext_newspaper_status(h, p, q, b):
     eid = h.operator_id
     aff = newspaper_mod.NewspaperService.set_status(
         int(p["id"]), _int(b.get("status"), -1),
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "状态已更新", {"affected": aff}
-
 
 def ext_newspaper_price(h, p, q, b):
     eid = h.operator_id
@@ -495,7 +416,6 @@ def ext_newspaper_price(h, p, q, b):
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "价格已更新", {"affected": aff}
 
-
 def ext_newspaper_batch(h, p, q, b):
     rows = b.get("rows") or []
     if not isinstance(rows, list):
@@ -504,14 +424,11 @@ def ext_newspaper_batch(h, p, q, b):
     return 0, "批量导入完成", newspaper_mod.NewspaperService.batch_import(
         rows, operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_list_categories(h, p, q, b):
     return 0, "ok", newspaper_mod.CategoryService.list_categories()
 
-
 def ext_category_tree(h, p, q, b):
     return 0, "ok", newspaper_mod.CategoryService.get_tree()
-
 
 def ext_add_category(h, p, q, b):
     if not b.get("name"):
@@ -523,7 +440,6 @@ def ext_add_category(h, p, q, b):
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "新增成功", {"id": cid}
 
-
 def ext_update_category(h, p, q, b):
     eid = h.operator_id
     fields = {k: v for k, v in b.items() if k in {"name", "parent_id", "sort"}}
@@ -532,15 +448,12 @@ def ext_update_category(h, p, q, b):
         operator_name=_operator_name(eid), **fields)
     return 0, "修改成功", {"affected": aff}
 
-
 def ext_delete_category(h, p, q, b):
     eid = h.operator_id
     aff = newspaper_mod.CategoryService.delete_category(
         int(p["id"]), operator_id=eid, operator_name=_operator_name(eid))
     return 0, "删除成功", {"affected": aff}
 
-
-# ---------- 订阅管理（节点 42 / 76 / 77 / 78 / 79） ----------
 def ext_list_subs(h, p, q, b):
     return 0, "ok", subscription_mod.SubscriptionService.list_subscriptions(
         customer_id=_opt_int(q.get("customer_id")),
@@ -549,13 +462,11 @@ def ext_list_subs(h, p, q, b):
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
 
-
 def ext_get_sub(h, p, q, b):
     row = subscription_mod.SubscriptionService.get_subscription(int(p["id"]))
     if not row:
         return 404, "订阅不存在", None
     return 0, "ok", row
-
 
 def ext_create_sub(h, p, q, b):
     for k in ("customer_id", "newspaper_id", "start_date", "end_date", "periods"):
@@ -569,12 +480,10 @@ def ext_create_sub(h, p, q, b):
         remark=b.get("remark"), operator_id=eid, operator_name=_operator_name(eid))
     return 0, "新建成功", {"id": nid}
 
-
 def ext_cancel_sub(h, p, q, b):
     eid = h.operator_id
     return 0, "退订成功", subscription_mod.SubscriptionService.cancel_subscription(
         int(p["id"]), operator_id=eid, operator_name=_operator_name(eid))
-
 
 def ext_change_sub(h, p, q, b):
     if not b.get("new_newspaper_id"):
@@ -584,19 +493,15 @@ def ext_change_sub(h, p, q, b):
         int(p["id"]), int(b["new_newspaper_id"]),
         operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_sub_expiring(h, p, q, b):
     return 0, "ok", subscription_mod.RenewalService.list_expiring(
         days=_int(q.get("days"), 7))
 
-
 def ext_sub_stat_newspaper(h, p, q, b):
     return 0, "ok", subscription_mod.SubscriptionStatService.by_newspaper()
 
-
 def ext_sub_stat_custtype(h, p, q, b):
     return 0, "ok", subscription_mod.SubscriptionStatService.by_customer_type()
-
 
 def ext_sub_stat_period(h, p, q, b):
     s, e = _date(q.get("start")), _date(q.get("end"))
@@ -604,8 +509,6 @@ def ext_sub_stat_period(h, p, q, b):
         return 400, "缺少 start / end (YYYY-MM-DD)", None
     return 0, "ok", subscription_mod.SubscriptionStatService.by_period(s, e)
 
-
-# ---------- 报刊入库管理（节点 44 / 84 / 85 / 86 / 87） ----------
 def ext_stock_in(h, p, q, b):
     for k in ("newspaper_id", "issue_no", "quantity"):
         if b.get(k) in (None, ""):
@@ -616,7 +519,6 @@ def ext_stock_in(h, p, q, b):
         threshold=_opt_int(b.get("threshold")),
         operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_stock_in_batch(h, p, q, b):
     rows = b.get("rows") or []
     if not isinstance(rows, list):
@@ -625,14 +527,12 @@ def ext_stock_in_batch(h, p, q, b):
     return 0, "批量入库完成", stock_mod.StockInService.batch_stock_in(
         rows, operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_list_stock_in(h, p, q, b):
     return 0, "ok", stock_mod.StockInService.list_stock_in(
         newspaper_id=_opt_int(q.get("newspaper_id")),
         start=q.get("start") or None, end=q.get("end") or None,
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
-
 
 def ext_list_stock(h, p, q, b):
     return 0, "ok", stock_mod.StockService.list_stock(
@@ -641,10 +541,8 @@ def ext_list_stock(h, p, q, b):
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
 
-
 def ext_stock_warning(h, p, q, b):
     return 0, "ok", stock_mod.StockService.warning_list()
-
 
 def ext_stock_threshold(h, p, q, b):
     for k in ("newspaper_id", "issue_no", "threshold"):
@@ -656,7 +554,6 @@ def ext_stock_threshold(h, p, q, b):
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "阈值已设置", {"affected": aff}
 
-
 def ext_stock_check(h, p, q, b):
     for k in ("newspaper_id", "issue_no", "actual_qty"):
         if b.get(k) in (None, ""):
@@ -667,15 +564,12 @@ def ext_stock_check(h, p, q, b):
         remark=b.get("remark"),
         operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_list_checks(h, p, q, b):
     return 0, "ok", stock_mod.StockCheckService.list_checks(
         newspaper_id=_opt_int(q.get("newspaper_id")),
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
 
-
-# ---------- 报刊发放系统（节点 46 / 92 / 93 / 94 / 95） ----------
 def ext_gen_tasks(h, p, q, b):
     d = _date(b.get("deliver_date"))
     if not d:
@@ -683,7 +577,6 @@ def ext_gen_tasks(h, p, q, b):
     eid = h.operator_id
     return 0, "生成完成", delivery_mod.DeliveryTaskService.generate_daily_tasks(
         d, operator_id=eid, operator_name=_operator_name(eid))
-
 
 def ext_assign_tasks(h, p, q, b):
     d = _date(b.get("deliver_date"))
@@ -697,7 +590,6 @@ def ext_assign_tasks(h, p, q, b):
     return 0, "分配完成", delivery_mod.DeliveryTaskService.assign_by_district(
         d, mapping, operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_list_tasks(h, p, q, b):
     return 0, "ok", delivery_mod.DeliveryTaskService.list_tasks(
         deliver_date=_date(q.get("deliver_date")),
@@ -707,13 +599,11 @@ def ext_list_tasks(h, p, q, b):
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
 
-
 def ext_sign_task(h, p, q, b):
     eid = h.operator_id
     aff = delivery_mod.DeliveryTaskService.sign(
         int(p["id"]), operator_id=eid, operator_name=_operator_name(eid))
     return 0, "已签收", {"affected": aff}
-
 
 def ext_abnormal_task(h, p, q, b):
     if not b.get("remark"):
@@ -724,7 +614,6 @@ def ext_abnormal_task(h, p, q, b):
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "已上报", {"affected": aff}
 
-
 def ext_report_missing(h, p, q, b):
     if b.get("task_id") in (None, ""):
         return 400, "缺少 task_id", None
@@ -734,7 +623,6 @@ def ext_report_missing(h, p, q, b):
         operator_id=eid, operator_name=_operator_name(eid))
     return 0, "缺刊已登记", {"missing_id": mid}
 
-
 def ext_reissue(h, p, q, b):
     d = _date(b.get("deliver_date"))
     if not d:
@@ -743,27 +631,22 @@ def ext_reissue(h, p, q, b):
     return 0, "补发已生成", delivery_mod.MissingService.reissue(
         int(p["id"]), d, operator_id=eid, operator_name=_operator_name(eid))
 
-
 def ext_list_missing(h, p, q, b):
     return 0, "ok", delivery_mod.MissingService.list_missing(
         status=q.get("status") or None,
         page=max(_int(q.get("page"), 1), 1),
         size=max(_int(q.get("size"), 20), 1))
 
-
-# ---------- 系统用户管理（节点 48 / 100 / 101 / 103，需 O5 或对应权限） ----------
 def ext_list_employees(h, p, q, b):
     return 0, "ok", EmployeeService.list_employees(
         keyword=q.get("keyword", ""), status=_opt_int(q.get("status")),
         page=max(_int(q.get("page"), 1), 1), size=max(_int(q.get("size"), 20), 1))
-
 
 def ext_get_employee(h, p, q, b):
     row = EmployeeService.get_employee(int(p["id"]))
     if not row:
         return 404, "员工不存在", None
     return 0, "ok", row
-
 
 def ext_add_employee(h, p, q, b):
     for k in ("emp_no", "username", "password"):
@@ -774,19 +657,16 @@ def ext_add_employee(h, p, q, b):
         real_name=b.get("real_name"), phone=b.get("phone"))
     return 0, "新增成功", {"id": nid}
 
-
 def ext_update_employee(h, p, q, b):
     fields = {k: v for k, v in b.items() if k in {"real_name", "phone", "status"}}
     aff = EmployeeService.update_employee(int(p["id"]), **fields)
     return 0, "修改成功", {"affected": aff}
-
 
 def ext_delete_employee(h, p, q, b):
     aff = EmployeeService.delete_employee(int(p["id"]))
     if not aff:
         return 404, "员工不存在", None
     return 0, "删除成功", {"affected": aff}
-
 
 def ext_employee_status(h, p, q, b):
     st = _int(b.get("status"), -1)
@@ -795,17 +675,14 @@ def ext_employee_status(h, p, q, b):
     aff = EmployeeService.set_status(int(p["id"]), st)
     return 0, "状态已更新", {"affected": aff}
 
-
 def ext_employee_password(h, p, q, b):
     if not b.get("password"):
         return 400, "缺少 password", None
     aff = EmployeeService.reset_password(int(p["id"]), b["password"])
     return 0, "密码已重置", {"affected": aff}
 
-
 def ext_employee_levels(h, p, q, b):
     return 0, "ok", PermissionService.get_employee_levels(int(p["id"]))
-
 
 def ext_assign_level(h, p, q, b):
     if not b.get("level"):
@@ -813,15 +690,12 @@ def ext_assign_level(h, p, q, b):
     aff = PermissionService.assign_level(int(p["id"]), b["level"])
     return 0, "已分配", {"affected": aff}
 
-
 def ext_revoke_level(h, p, q, b):
     aff = PermissionService.revoke_level(int(p["id"]), p["level"])
     return 0, "已撤销", {"affected": aff}
 
-
 def ext_employee_perms(h, p, q, b):
     return 0, "ok", PermissionService.get_employee_permissions(int(p["id"]))
-
 
 def ext_grant_perm(h, p, q, b):
     if not b.get("perm_code"):
@@ -829,15 +703,12 @@ def ext_grant_perm(h, p, q, b):
     aff = PermissionService.grant_permission(int(p["id"]), b["perm_code"])
     return 0, "已授予", {"affected": aff}
 
-
 def ext_revoke_perm(h, p, q, b):
     aff = PermissionService.revoke_permission(int(p["id"]), p["code"])
     return 0, "已撤销", {"affected": aff}
 
-
 def ext_list_levels(h, p, q, b):
     return 0, "ok", PermissionService.list_levels()
-
 
 def ext_create_level(h, p, q, b):
     if not b.get("level") or not b.get("name"):
@@ -845,21 +716,17 @@ def ext_create_level(h, p, q, b):
     PermissionService.create_level(b["level"], b["name"], b.get("desc", ""))
     return 0, "已创建", {"level": b["level"]}
 
-
 def ext_list_logs(h, p, q, b):
     return 0, "ok", OperationLogService.list_logs(
         emp_id=_opt_int(q.get("emp_id")), module=q.get("module") or None,
         start=q.get("start") or None, end=q.get("end") or None,
         page=max(_int(q.get("page"), 1), 1), size=max(_int(q.get("size"), 50), 1))
 
-
-# ---------- 个人中心（节点 102，任意登录员工，仅作用于本人） ----------
 def ext_profile(h, p, q, b):
     prof = ProfileService.get_profile(h.operator_id)
     if not prof:
         return 404, "账号不存在", None
     return 0, "ok", prof
-
 
 def ext_change_pwd(h, p, q, b):
     if not b.get("old_password") or not b.get("new_password"):
@@ -868,8 +735,6 @@ def ext_change_pwd(h, p, q, b):
         h.operator_id, b["old_password"], b["new_password"])
     return 0, "密码已修改", {"affected": aff}
 
-
-# ---------- 扩展路由表：(method, pattern, handler, perm, param_names) ----------
 EXT_ROUTES: List[Tuple[str, str, Callable, str, List[str]]] = [
     # 报刊数据管理
     ("GET",    r"^/api/newspapers$",                     ext_list_newspapers,  "newspaper:list",   []),
@@ -934,7 +799,6 @@ EXT_ROUTES: List[Tuple[str, str, Callable, str, List[str]]] = [
     ("PUT",    r"^/api/profile/password$",                     ext_change_pwd,       "", []),
 ]
 
-
 def _match_ext(method: str, path: str) -> Optional[_RouteMatch]:
     """扩展路由匹配：按 param_names 顺序把捕获组映射成具名参数。"""
     for m, pattern, handler, perm, names in EXT_ROUTES:
@@ -955,7 +819,6 @@ def _match_ext(method: str, path: str) -> Optional[_RouteMatch]:
         return rm
     return None
 
-
 class ApiHandler(BaseHTTPRequestHandler):
 
     """RESTful 请求分发器。"""
@@ -968,7 +831,6 @@ class ApiHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         logger.info("%s - %s", self.address_string(), fmt % args)
 
-    # ---------- 公共流程 ----------
     operator_id: Optional[int] = None  # 每请求由 _prepare 填充
 
     def _prepare(self) -> Optional[Tuple[int, str, Any]]:
@@ -1031,7 +893,6 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json(404, f"无匹配路由: {method} {self._path}", None, http_status=404)
             return
 
-        # ---------- 权限校验 ----------
         if self.operator_id is None or self.operator_id <= 0:
             self._json(401, "缺少 X-Emp-Id 操作者标识", None, http_status=401)
             return
@@ -1042,7 +903,6 @@ class ApiHandler(BaseHTTPRequestHandler):
             self._json(403, f"无权限: 需要 api:{match.perm}", None, http_status=403)
             return
 
-        # ---------- 执行业务 ----------
         try:
             code, msg, data = match.handler(
                 self, match.params, self._query, self._body)
@@ -1061,7 +921,6 @@ class ApiHandler(BaseHTTPRequestHandler):
         http_status = 200 if code == 0 else code
         self._json(code, msg, data, http_status=http_status)
 
-    # ---------- HTTP 动词 ----------
     def do_GET(self):
         self._dispatch("GET")
 
@@ -1077,7 +936,6 @@ class ApiHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self._dispatch("OPTIONS")
 
-    # ---------- 响应工具 ----------
     def _send_cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods",
@@ -1100,10 +958,7 @@ class ApiHandler(BaseHTTPRequestHandler):
         except BrokenPipeError:
             pass
 
-
-# ================================================================
 # 五、启动入口
-# ================================================================
 def _init_all_tables() -> None:
     """启动前初始化全部模块的表结构（幂等）。"""
     init_database()                 # 权限/员工/日志（含标准权限等级）
@@ -1112,7 +967,6 @@ def _init_all_tables() -> None:
     subscription_mod.init_tables()  # 订阅管理
     stock_mod.init_tables()         # 报刊入库管理
     delivery_mod.init_tables()      # 报刊发放系统
-
 
 def run(port: int = 8088, host: str = "0.0.0.0") -> None:
     # 启动前确保所有模块相关表已建好
@@ -1135,13 +989,11 @@ def run(port: int = 8088, host: str = "0.0.0.0") -> None:
     finally:
         server.server_close()
 
-
 def main() -> None:
     port = 8088
     if len(sys.argv) > 1:
         port = _int(sys.argv[1], 8088)
     run(port=port)
-
 
 if __name__ == "__main__":
     main()

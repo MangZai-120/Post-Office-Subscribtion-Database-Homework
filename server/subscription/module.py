@@ -1,26 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-订阅管理模块（业务模块）
-================================================================
-对应流程图节点：
-    · 节点 42  订阅管理
-    · 节点 76  新建订阅（选客户、选报刊、选起止日期、自动算价）
-    · 节点 77  退订/换订（退订结算、报刊替换）
-    · 节点 78  续订提醒（到期前自动提醒）
-    · 节点 79  订阅统计（按报刊、时段、客户类型多维统计）
-
-技术栈：Python + pymysql + MySQL
-设计原则：
-    · 前后端分离，本文件为后端核心逻辑，提供可被 Web 层调用的 API 函数。
-    · 复用 master/authority.py 中的 get_conn() 与 OperationLogService，
-      避免重复造轮子，统一数据库连接入口与审计口径。
-    · 订阅单号自动生成（SUB+时间戳+随机数保证唯一）。
-    · 价格计算自动从报刊表读取单价和折扣。
-    · 退订结算按剩余天数比例退款。
-================================================================
-"""
-
 import logging
 import os
 import random
@@ -33,14 +10,10 @@ from typing import Any, Dict, List, Optional
 import pymysql
 from pymysql.cursors import DictCursor
 
-# ----------------------------------------------------------------
 # 复用权限模块的数据库连接 / 操作日志
-# ----------------------------------------------------------------
 from server.core.authority import DB_CONFIG, OperationLogService, get_conn  # noqa: E402
 
-# ----------------------------------------------------------------
 # 日志
-# ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -53,12 +26,8 @@ STATUS_CANCELLED = "cancelled"    # 已退订
 STATUS_CHANGED = "changed"        # 已换订
 STATUS_EXPIRED = "expired"        # 已到期
 
-
-# ================================================================
 # 一、建表 DDL（节点 76/77/78/79）
-# ================================================================
 INIT_SQL_LIST: List[str] = [
-    # ---------- 订阅表（节点 76/77） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_subscription` (
         `id`           BIGINT        NOT NULL AUTO_INCREMENT COMMENT '订阅ID',
@@ -88,7 +57,6 @@ INIT_SQL_LIST: List[str] = [
     """,
 ]
 
-
 def init_tables() -> None:
     """初始化订阅表结构（幂等，已存在则跳过）。"""
     with get_conn() as conn:
@@ -98,10 +66,7 @@ def init_tables() -> None:
         conn.commit()
     logger.info("订阅管理表结构初始化完成（biz_subscription）。")
 
-
-# ================================================================
 # 二、订阅服务工具函数
-# ================================================================
 def gen_sub_no() -> str:
     """
     生成唯一的订阅单号。
@@ -111,20 +76,15 @@ def gen_sub_no() -> str:
     rand_part = str(random.randint(100000, 999999))  # 6位随机数
     return f"SUB{timestamp}{rand_part}"
 
-
 def calc_amount(unit_price: Decimal, periods: int, discount: Decimal) -> Decimal:
     """计算订阅总金额：amount = round(unit_price * periods * discount, 2)。"""
     result = unit_price * Decimal(periods) * discount
     return result.quantize(Decimal("0.01"))
 
-
-# ================================================================
 # 三、订阅管理（节点 76 新建订阅 / 节点 77 退订/换订）
-# ================================================================
 class SubscriptionService:
     """订阅增删改查、新建订阅、退订、换订。"""
 
-    # ---------- 增（新建订阅） ----------
     @staticmethod
     def create_subscription(
         customer_id: int,
@@ -193,7 +153,6 @@ class SubscriptionService:
             new_id, sub_no, customer_id, newspaper_id, amount)
         return new_id
 
-    # ---------- 查 ----------
     @staticmethod
     def get_subscription(sub_id: int) -> Optional[Dict[str, Any]]:
         """查询单个订阅详情。"""
@@ -247,7 +206,6 @@ class SubscriptionService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-    # ---------- 改（退订） ----------
     @staticmethod
     def cancel_subscription(
         sub_id: int,
@@ -303,7 +261,6 @@ class SubscriptionService:
                     sub_id, row["customer_id"], refund, affected)
         return {"affected": affected, "refund": float(refund)}
 
-    # ---------- 改（换订） ----------
     @staticmethod
     def change_subscription(
         sub_id: int,
@@ -361,10 +318,7 @@ class SubscriptionService:
                     sub_id, new_id, new_newspaper_id)
         return {"old_id": sub_id, "new_id": new_id}
 
-
-# ================================================================
 # 四、续订提醒（节点 78）
-# ================================================================
 class RenewalService:
     """续订提醒相关业务。"""
 
@@ -394,10 +348,7 @@ class RenewalService:
         logger.info("查询 %d 天内即将到期订阅: 共 %d 条", days, len(rows) if rows else 0)
         return rows or []
 
-
-# ================================================================
 # 五、订阅统计（节点 79）
-# ================================================================
 class SubscriptionStatService:
     """多维度订阅统计：按报刊、时段、客户类型。"""
 
@@ -456,10 +407,7 @@ class SubscriptionStatService:
         logger.info("按客户类型统计完成: %d 种类型", len(rows) if rows else 0)
         return rows or []
 
-
-# ================================================================
 # 六、对外统一入口（供 Web 层 / 命令行测试调用）
-# ================================================================
 def main() -> None:
     """命令行自测：建表 + 打印各 Service 提示。"""
     init_tables()
@@ -467,7 +415,6 @@ def main() -> None:
     print("  - SubscriptionService       订阅增删改查/新建/退订/换订")
     print("  - RenewalService            续订提醒（查询即将到期）")
     print("  - SubscriptionStatService   多维统计（按报刊/时段/客户类型）")
-
 
 if __name__ == "__main__":
     main()

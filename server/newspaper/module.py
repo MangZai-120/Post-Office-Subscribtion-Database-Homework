@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-报刊数据管理模块（业务模块）
-================================================================
-对应流程图节点：
-    · 节点 38  报刊数据管理
-    · 节点 60  报刊信息维护（新增/编辑/停刊，支持批量导入）
-    · 节点 62  分类管理（树形分类，parent_id）
-    · 节点 63  价格策略（单价、订阅周期、折扣）
-    · 节点 64  报刊检索（按名称、分类、CN号检索）
-
-技术栈：Python + pymysql + MySQL
-设计原则：
-    · 前后端分离，本文件为后端核心逻辑，提供可被 Web 层调用的 API 函数。
-    · 复用 master/authority.py 中的 get_conn() 与 OperationLogService，
-      避免重复造轮子，统一数据库连接入口与审计口径。
-    · 分类采用树形结构（parent_id），支持层级查询与树形组装。
-    · 批量导入采用容错机制：逐条处理，失败的行记入 fail 列表，成功的行递增。
-================================================================
-"""
-
 import json
 import logging
 import os
@@ -29,26 +7,18 @@ from typing import Any, Dict, List, Optional
 import pymysql
 from pymysql.cursors import DictCursor
 
-# ----------------------------------------------------------------
 # 复用权限模块的数据库连接 / 操作日志
-# ----------------------------------------------------------------
 from server.core.authority import DB_CONFIG, OperationLogService, get_conn  # noqa: E402
 
-# ----------------------------------------------------------------
 # 日志
-# ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
 )
 logger = logging.getLogger("newspaper")
 
-
-# ================================================================
 # 一、建表 DDL（对应节点 60 / 62 / 63 / 64）
-# ================================================================
 INIT_SQL_LIST: List[str] = [
-    # ---------- 报刊分类表（节点 62） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_category` (
         `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '分类ID',
@@ -61,7 +31,6 @@ INIT_SQL_LIST: List[str] = [
         KEY `idx_name` (`name`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='报刊分类表';
     """,
-    # ---------- 报刊信息表（节点 60 / 63） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_newspaper` (
         `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '报刊ID',
@@ -87,7 +56,6 @@ INIT_SQL_LIST: List[str] = [
     """,
 ]
 
-
 def init_tables() -> None:
     """初始化报刊相关表结构（幂等，已存在则跳过）。"""
     with get_conn() as conn:
@@ -97,14 +65,10 @@ def init_tables() -> None:
         conn.commit()
     logger.info("报刊数据管理表结构初始化完成（biz_category / biz_newspaper）。")
 
-
-# ================================================================
 # 二、分类管理（节点 62）
-# ================================================================
 class CategoryService:
     """报刊分类树形管理：新增、编辑、删除、查询、树形组装。"""
 
-    # ---------- 增 ----------
     @staticmethod
     def add_category(
         name: str,
@@ -134,7 +98,6 @@ class CategoryService:
         logger.info("新增分类 id=%s name=%s parent_id=%s", new_id, name, parent_id)
         return new_id
 
-    # ---------- 改 ----------
     @staticmethod
     def update_category(
         cat_id: int,
@@ -165,7 +128,6 @@ class CategoryService:
         )
         return affected
 
-    # ---------- 删 ----------
     @staticmethod
     def delete_category(
         cat_id: int,
@@ -200,7 +162,6 @@ class CategoryService:
             logger.info("删除分类 id=%s", cat_id)
         return affected
 
-    # ---------- 查：平铺列表 ----------
     @staticmethod
     def list_categories() -> List[Dict[str, Any]]:
         """返回全部分类（平铺，不含树形关系）。"""
@@ -212,7 +173,6 @@ class CategoryService:
             )
             return cur.fetchall()
 
-    # ---------- 查：树形组装 ----------
     @staticmethod
     def get_tree() -> List[Dict[str, Any]]:
         """
@@ -245,14 +205,10 @@ class CategoryService:
 
         return roots
 
-
-# ================================================================
 # 三、报刊信息管理（节点 60 / 63 / 64）
-# ================================================================
 class NewspaperService:
     """报刊增删改查、起停、价格策略、批量导入、检索。"""
 
-    # ---------- 增 ----------
     @staticmethod
     def add_newspaper(
         paper_no: str,
@@ -294,7 +250,6 @@ class NewspaperService:
         logger.info("新增报刊 id=%s paper_no=%s name=%s", new_id, paper_no, name)
         return new_id
 
-    # ---------- 改 ----------
     @staticmethod
     def update_newspaper(
         paper_id: int,
@@ -344,7 +299,6 @@ class NewspaperService:
         )
         return affected
 
-    # ---------- 起停（节点 60） ----------
     @staticmethod
     def set_status(
         paper_id: int,
@@ -361,7 +315,6 @@ class NewspaperService:
         return NewspaperService.update_newspaper(
             paper_id, operator_id, operator_name, status=status)
 
-    # ---------- 价格策略（节点 63） ----------
     @staticmethod
     def set_price(
         paper_id: int,
@@ -388,7 +341,6 @@ class NewspaperService:
         return NewspaperService.update_newspaper(
             paper_id, operator_id, operator_name, **updates)
 
-    # ---------- 查：单条 ----------
     @staticmethod
     def get_newspaper(paper_id: int) -> Optional[Dict[str, Any]]:
         """查询单个报刊详情。"""
@@ -402,7 +354,6 @@ class NewspaperService:
             )
             return cur.fetchone()
 
-    # ---------- 查：列表（节点 64 检索） ----------
     @staticmethod
     def list_newspapers(
         keyword: str = "",
@@ -454,7 +405,6 @@ class NewspaperService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-    # ---------- 批量导入（节点 60） ----------
     @staticmethod
     def batch_import(
         rows: List[Dict[str, Any]],
@@ -529,17 +479,13 @@ class NewspaperService:
         logger.info("批量导入完成：成功 %d 条，失败 %d 条", success_count, len(fail_list))
         return {"success": success_count, "fail": fail_list}
 
-
-# ================================================================
 # 四、对外统一入口（供 Web 层 / 命令行测试调用）
-# ================================================================
 def main() -> None:
     """命令行自测：建表 + 打印各 Service 提示。"""
     init_tables()
     print("[OK] 报刊数据管理模块已就绪：")
     print("  - CategoryService        报刊分类树形管理（CRUD / 树形组装）")
     print("  - NewspaperService       报刊信息管理（CRUD / 起停 / 价格策略 / 检索 / 批量导入）")
-
 
 if __name__ == "__main__":
     main()

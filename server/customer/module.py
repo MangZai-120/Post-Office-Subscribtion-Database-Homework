@@ -1,25 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-================================================================
-客户数据管理模块（业务模块）
-================================================================
-对应流程图节点：
-    · 节点 40  客户数据管理
-    · 节点 68  客户档案（个人 / 单位 客户信息管理）
-    · 节点 69  地址管理（一个客户支持多个投递地址）
-    · 节点 70  客户标签（标记客户偏好、订阅需求）
-    · 节点 71  订阅历史（查看客户历史订阅记录）
-
-技术栈：Python + pymysql + MySQL
-设计原则：
-    · 前后端分离，本文件为后端核心逻辑，提供可被 Web 层调用的 API 函数。
-    · 复用 master/authority.py 中的 get_conn() 与 OperationLogService，
-      避免重复造轮子，统一数据库连接入口与审计口径。
-    · 订阅历史采用「防御性查询」：订阅管理模块（节点 42）尚未实现，
-      若订阅表不存在则捕获异常返回空列表，待该模块建表后自动有数据。
-================================================================
-"""
-
 import logging
 import os
 import sys
@@ -28,14 +6,10 @@ from typing import Any, Dict, List, Optional
 import pymysql
 from pymysql.cursors import DictCursor
 
-# ----------------------------------------------------------------
 # 复用权限模块的数据库连接 / 操作日志
-# ----------------------------------------------------------------
 from server.core.authority import DB_CONFIG, OperationLogService, get_conn, hash_password  # noqa: E402
 
-# ----------------------------------------------------------------
 # 日志
-# ----------------------------------------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -51,12 +25,8 @@ CUSTOMER_TYPES = (CUSTOMER_TYPE_PERSONAL, CUSTOMER_TYPE_ORG)
 STATUS_ACTIVE = 1
 STATUS_INACTIVE = 0
 
-
-# ================================================================
 # 一、建表 DDL（对应节点 68 / 69 / 70）
-# ================================================================
 INIT_SQL_LIST: List[str] = [
-    # ---------- 客户档案表（节点 68） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_customer` (
         `id`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '客户ID',
@@ -81,7 +51,6 @@ INIT_SQL_LIST: List[str] = [
         KEY `idx_phone` (`phone`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户档案表';
     """,
-    # ---------- 客户地址表（节点 69：支持多地址） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_customer_address` (
         `id`          BIGINT       NOT NULL AUTO_INCREMENT,
@@ -98,7 +67,6 @@ INIT_SQL_LIST: List[str] = [
         KEY `idx_customer` (`customer_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='客户地址表';
     """,
-    # ---------- 客户标签表（节点 70） ----------
     """
     CREATE TABLE IF NOT EXISTS `biz_customer_tag` (
         `id`         BIGINT       NOT NULL AUTO_INCREMENT,
@@ -113,7 +81,6 @@ INIT_SQL_LIST: List[str] = [
     """,
 ]
 
-
 def init_tables() -> None:
     """初始化客户相关表结构（幂等，已存在则跳过）。"""
     with get_conn() as conn:
@@ -123,14 +90,10 @@ def init_tables() -> None:
         conn.commit()
     logger.info("客户数据管理表结构初始化完成（biz_customer / 地址 / 标签）。")
 
-
-# ================================================================
 # 二、客户档案管理（节点 68）
-# ================================================================
 class CustomerService:
     """客户档案增删改查、起停、密码重置。"""
 
-    # ---------- 增 ----------
     @staticmethod
     def add_customer(
         cust_no: str,
@@ -177,7 +140,6 @@ class CustomerService:
         logger.info("新增客户 id=%s cust_no=%s name=%s", new_id, cust_no, name)
         return new_id
 
-    # ---------- 删 ----------
     @staticmethod
     def delete_customer(customer_id: int,
                         operator_id: Optional[int] = None,
@@ -208,7 +170,6 @@ class CustomerService:
             logger.info("删除客户 id=%s affected=%s", customer_id, affected)
         return affected
 
-    # ---------- 改 ----------
     @staticmethod
     def update_customer(customer_id: int, operator_id: Optional[int] = None,
                         operator_name: Optional[str] = None,
@@ -271,7 +232,6 @@ class CustomerService:
         )
         return affected
 
-    # ---------- 查 ----------
     @staticmethod
     def get_customer(customer_id: int) -> Optional[Dict[str, Any]]:
         with get_conn() as conn:
@@ -335,10 +295,7 @@ class CustomerService:
             rows = cur.fetchall()
         return {"total": total, "page": page, "size": size, "list": rows}
 
-
-# ================================================================
 # 三、客户地址管理（节点 69：支持多地址）
-# ================================================================
 class CustomerAddressService:
     """客户多地址增删改查、设置默认地址。"""
 
@@ -473,10 +430,7 @@ class CustomerAddressService:
             )
             return cur.fetchone()
 
-
-# ================================================================
 # 四、客户标签管理（节点 70）
-# ================================================================
 class CustomerTagService:
     """客户标签：标记偏好、订阅需求。同一客户 + 标签名唯一。"""
 
@@ -565,15 +519,11 @@ class CustomerTagService:
             cur.execute(sql + " ORDER BY c.id ASC", params)
             return cur.fetchall()
 
-
-# ================================================================
 # 五、订阅历史（节点 71：防御性查询）
-# ================================================================
 # 说明：订阅管理模块（节点 42）尚未实现，订阅表暂不存在。
 # 这里采用「防御性查询」——表不存在时捕获异常返回空列表，
 # 待订阅管理模块建好 biz_subscription 表后，本接口自动有数据返回。
 _SUBSCRIPTION_TABLE = "biz_subscription"
-
 
 class SubscriptionHistoryService:
     """查看客户历史订阅记录（依赖订阅管理模块的 biz_subscription 表）。"""
@@ -647,10 +597,7 @@ class SubscriptionHistoryService:
             "latest_create_time": row.get("latest_create_time"),
         }
 
-
-# ================================================================
 # 六、对外统一入口（供 Web 层 / 命令行测试调用）
-# ================================================================
 def main() -> None:
     """命令行自测：建表 + 打印各 Service 提示。"""
     init_tables()
@@ -659,7 +606,6 @@ def main() -> None:
     print("  - CustomerAddressService     多地址 CRUD/默认地址")
     print("  - CustomerTagService         标签设置/移除/反向检索")
     print("  - SubscriptionHistoryService 订阅历史(防御性查询)")
-
 
 if __name__ == "__main__":
     main()
